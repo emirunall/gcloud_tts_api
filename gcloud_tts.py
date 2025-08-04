@@ -2,10 +2,13 @@ import os
 from flask import Flask, request, send_file, render_template
 from google.cloud import texttospeech
 
-# Google Cloud servis hesabı tanımı
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcloud_key.json"
+# Flask uygulamasını başlatırken template klasörü belirtilmeli
+app = Flask(__name__, template_folder="templates")
 
-app = Flask(__name__)
+# Google servis hesabı ayarı: Render ortamında çevresel değişkenden oku
+# Eğer yerel çalışıyorsan, bu satırı koruyabilirsin ama Render için güvenli değil
+if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") is None:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcloud_key.json"
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -44,5 +47,7 @@ def synthesize_text_to_mp3(text):
 
     return output_path
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# 🔥 GEREKLİ: Render'da app.run() KULLANILMAZ. Gunicorn kullanıyor zaten.
+# Yani aşağıdaki satırı SİLMELİSİN veya yorum satırı yapmalısın:
+# if __name__ == '__main__':
+#     app.run(debug=True)
