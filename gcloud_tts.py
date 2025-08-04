@@ -32,7 +32,7 @@ def synthesize_text_to_mp3(text):
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.91,
+        speaking_rate=0.96,
     )
 
     output_path = "/tmp/output.mp3"  # Render uyumlu dosya yolu
