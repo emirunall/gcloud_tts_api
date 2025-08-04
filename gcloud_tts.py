@@ -1,66 +1,48 @@
-from flask import Flask, render_template, request, jsonify, send_file
-from google.cloud import texttospeech
 import os
-from io import BytesIO
+import json
+from flask import Flask, request, send_file, render_template
+from google.cloud import texttospeech
+from google.oauth2 import service_account
 
-app = Flask(__name__)
-char_log_path = "used_chars.txt"
+app = Flask(__name__, template_folder="templates")
 
-# Servis hesabı otomatik olarak yüklenecek şekilde ayarlanmalı (Render'da ayarlanmıştı)
+# Google servis hesabı kimliği (Render ortam değişkeninden alınır)
+keyfile_dict = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+credentials = service_account.Credentials.from_service_account_info(keyfile_dict)
 
-# İlk çalıştırmada karakter log dosyası oluştur
-if not os.path.exists(char_log_path):
-    with open(char_log_path, "w") as f:
-        f.write("0")
-
-def update_character_count(new_count):
-    with open(char_log_path, "r+") as f:
-        total = int(f.read())
-        total += new_count
-        f.seek(0)
-        f.write(str(total))
-        f.truncate()
-
-def get_total_characters():
-    with open(char_log_path, "r") as f:
-        return int(f.read())
-
-@app.route("/", methods=["GET"])
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    total_chars = get_total_characters()
-    return render_template("index.html", used_chars=total_chars)
+    if request.method == 'POST':
+        text = request.form['text']
+        filename = synthesize_text_to_mp3(text)
+        return send_file(filename, as_attachment=True, download_name="dogal_ses.mp3")  # 🔧 Güncellenen satır
 
-@app.route("/speak", methods=["POST"])
-def speak():
-    text = request.form.get("text")
-    if not text:
-        return jsonify({"error": "Metin alanı boş"}), 400
+    return render_template('index.html')
 
-    update_character_count(len(text))
 
-    client = texttospeech.TextToSpeechClient()
-    input_text = texttospeech.SynthesisInput(text=text)
+def synthesize_text_to_mp3(text):
+    client = texttospeech.TextToSpeechClient(credentials=credentials)
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice = texttospeech.VoiceSelectionParams(
         language_code="tr-TR",
-        ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+        name="tr-TR-Chirp3-HD-Erinome",
     )
 
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=0.90,
     )
 
+    output_path = "/tmp/output.mp3"  # Render uyumlu dosya yolu
     response = client.synthesize_speech(
-        input=input_text, voice=voice, audio_config=audio_config
+        input=synthesis_input,
+        voice=voice,
+        audio_config=audio_config,
     )
 
-    return send_file(BytesIO(response.audio_content),
-                     mimetype="audio/mpeg",
-                     as_attachment=False,
-                     download_name="speech.mp3")
+    with open(output_path, "wb") as out:
+        out.write(response.audio_content)
 
-@app.route("/reset", methods=["POST"])
-def reset_counter():
-    with open(char_log_path, "w") as f:
-        f.write("0")
-    return jsonify({"message": "Sayaç sıfırlandı."})
+    return output_path
